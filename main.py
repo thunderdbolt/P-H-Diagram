@@ -10,42 +10,41 @@ def plot_ph_diagram(points, fluid):
     h_g = []
 
     critical_pressure = PropsSI('Pcrit', fluid)
-    triple_point_pressure = PropsSI('ptriple', fluid)
-
     for P in pressures:
-        if triple_point_pressure < P < critical_pressure:
+        if P < critical_pressure:
             h_f.append(PropsSI('H', 'P', P, 'Q', 0, fluid))
             h_g.append(PropsSI('H', 'P', P, 'Q', 1, fluid))
-        elif P >= critical_pressure:
-            # Handle supercritical fluid region
-            h_f.append(PropsSI('H', 'P', P, 'T', PropsSI('Tcrit', fluid), fluid))
-            h_g.append(h_f[-1])  # In supercritical region, there's no distinction between liquid and vapor
+        else:
+            h_f.append(PropsSI('H', 'P', critical_pressure, 'Q', 0, fluid))
+            h_g.append(PropsSI('H', 'P', critical_pressure, 'Q', 1, fluid))
 
     plt.figure(figsize=(10, 8))
-
-    if h_f and h_g:
-        plt.fill_betweenx(pressures / 1e6, h_f, h_g, color='lightgrey', alpha=0.5, where=(pressures < critical_pressure))
+    plt.fill_betweenx(pressures / 1e6, h_f, h_g, color='lightgrey', alpha=0.5, where=(pressures < critical_pressure))
 
     # Plot isotherms
     temperatures = np.linspace(273.15 + 10, 823.15, 10)  # From 10 to 550°C
     for T in temperatures:
-        h = [PropsSI('H', 'P', P, 'T', T, fluid) for P in pressures if P >= triple_point_pressure]
+        h = [PropsSI('H', 'P', P, 'T', T, fluid) for P in pressures]
         plt.plot(h, pressures / 1e6, label=f'{T-273.15:.0f} °C')
 
     # Calculate enthalpy for the user-defined points and plot
     h_values = []
     p_values = []
     for point in points:
-        if point['P'] >= triple_point_pressure:
-            h = PropsSI('H', 'P', point['P'], 'T', point['T'], fluid)
-            h_values.append(h)
-            p_values.append(point['P'] / 1e6)
-            plt.plot(h, point['P'] / 1e6, 'o', label=f"Point ({point['T']-273.15:.0f}°C, {point['P']/1e6:.2f}MPa)")
+        h = PropsSI('H', 'P', point['P'], 'T', point['T'], fluid)
+        h_values.append(h)
+        p_values.append(point['P'] / 1e6)
+        plt.plot(h, point['P'] / 1e6, 'o', label=f"Point ({point['T']-273.15:.0f}°C, {point['P']/1e6:.2f}MPa)")
+
+    # Connect the points and fill the area
+    if len(h_values) > 1:
+        plt.plot(h_values, p_values, 'k-', alpha=0.7)
+        plt.fill(h_values, p_values, 'green', alpha=0.3)  # Fill the area
 
     plt.xlabel('Enthalpy [J/kg]')
     plt.ylabel('Pressure [MPa]')
     plt.title(f'p-h Diagram for {fluid} up to 250 MPa')
-    plt.legend(loc='upper right')
+    plt.legend(title='Isotherms & Points', loc='upper right')
     plt.yscale('log')
     plt.xscale('linear')
     plt.grid(True)
@@ -53,12 +52,11 @@ def plot_ph_diagram(points, fluid):
 
     return plt
 
-
 st.title("Interactive p-h Diagram")
 
 # User inputs for fluid and points
 st.sidebar.header("Settings", )
-fluid = st.sidebar.selectbox("Select Fluid", ['Water', 'R134a', 'Ammonia', 'Propane', 'CO2'])
+fluid = st.sidebar.selectbox("Select Fluid", ['Water', 'R134a', 'Ammonia', 'Propane'])
 
 st.sidebar.header("Define the Points")
 points = []
