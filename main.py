@@ -56,7 +56,7 @@ st.title("Interactive p-h Diagram")
 
 # User inputs for fluid and points
 st.sidebar.header("Settings", )
-fluid = st.sidebar.selectbox("Select Fluid", ['Water', 'R134a', 'Ammonia', 'Propane'])
+fluid = st.sidebar.selectbox("Select Fluid", ['Water', 'R134a', 'Ammonia', 'Propane', 'Isobutane'])
 
 st.sidebar.header("Define the Points")
 points = []
