@@ -3,42 +3,33 @@ import numpy as np
 import matplotlib.pyplot as plt
 from CoolProp.CoolProp import PropsSI
 
-# Function to plot the p-h diagram with user-defined limits and delta T for isotherms
+# Function to plot p-h diagram (we will update this in later phases)
 def plot_ph_diagram(points, fluid, h_min, h_max, p_min, p_max, delta_T):
-    # Generate a range of pressures for plotting
     pressures = np.logspace(np.log10(p_min), np.log10(p_max), 100)
-
     h_f = []
     h_g = []
 
-    # Get critical properties to avoid exceeding physical limits
     critical_pressure = PropsSI('Pcrit', fluid)
-
-    # Collect saturated liquid (Q=0) and vapor (Q=1) enthalpies for plotting
     for P in pressures:
         if P < critical_pressure:
             h_f.append(PropsSI('H', 'P', P, 'Q', 0, fluid))
             h_g.append(PropsSI('H', 'P', P, 'Q', 1, fluid))
         else:
-            # For pressures above the critical point, assume constant enthalpy
             h_f.append(PropsSI('H', 'P', critical_pressure, 'Q', 0, fluid))
             h_g.append(PropsSI('H', 'P', critical_pressure, 'Q', 1, fluid))
 
-    # Create the plot
     plt.figure(figsize=(10, 8))
     plt.fill_betweenx(pressures / 1e6, h_f, h_g, color='lightgrey', alpha=0.5, where=(pressures < critical_pressure))
 
-    # Plot isotherms with user-defined delta T
     temperature_range = np.arange(273.15 + 10, 823.15, delta_T)
     for T in temperature_range:
         try:
             h = [PropsSI('H', 'P', P, 'T', T, fluid) for P in pressures]
-            if all(h_min <= val <= h_max for val in h):  # Plot only within enthalpy limits
+            if all(h_min <= val <= h_max for val in h):
                 plt.plot(h, pressures / 1e6, label=f'{T-273.15:.0f} °C')
         except ValueError:
             pass
 
-    # Calculate and plot user-defined points
     h_values = []
     p_values = []
     for point in points:
@@ -50,16 +41,13 @@ def plot_ph_diagram(points, fluid, h_min, h_max, p_min, p_max, delta_T):
         except ValueError:
             st.error(f"Invalid point: T={point['T']-273.15:.1f}°C, P={point['P']/1e6:.2f} MPa")
 
-    # Connect points and fill the area between them
     if len(h_values) > 1:
         plt.plot(h_values, p_values, 'k-', alpha=0.7)
-        plt.fill(h_values, p_values, 'green', alpha=0.3)  # Fill the area
+        plt.fill(h_values, p_values, 'green', alpha=0.3)
 
-    # Set axis limits as per user input
     plt.xlim(h_min, h_max)
     plt.ylim(p_min / 1e6, p_max / 1e6)
 
-    # Customize labels and scales
     plt.xlabel('Enthalpy [J/kg]')
     plt.ylabel('Pressure [MPa]')
     plt.title(f'p-h Diagram for {fluid} (Custom Limits)')
@@ -70,40 +58,33 @@ def plot_ph_diagram(points, fluid, h_min, h_max, p_min, p_max, delta_T):
 
     return plt
 
-# Optimization: Best energy extraction with four points
-def optimize_energy_extraction(points, fluid):
-    if len(points) < 4:
-        st.error("Optimization requires at least 4 points.")
-        return None, None
-    
-    max_delta_h = 0
-    best_points = None
-    
-    # Check all combinations of four points for the highest enthalpy drop
-    for i in range(len(points) - 3):
-        h1 = PropsSI('H', 'P', points[i]['P'], 'T', points[i]['T'], fluid)
-        h2 = PropsSI('H', 'P', points[i + 1]['P'], 'T', points[i + 1]['T'], fluid)
-        h3 = PropsSI('H', 'P', points[i + 2]['P'], 'T', points[i + 2]['T'], fluid)
-        h4 = PropsSI('H', 'P', points[i + 3]['P'], 'T', points[i + 3]['T'], fluid)
-        
-        # Calculate total enthalpy difference (Delta H)
-        delta_h = abs(h4 - h1)  # Total enthalpy drop between the first and fourth point
-        
-        if delta_h > max_delta_h:
-            max_delta_h = delta_h
-            best_points = (points[i], points[i + 1], points[i + 2], points[i + 3])
+st.title("Geothermal System Optimization Tool")
 
-    return max_delta_h, best_points
+# Sidebar for enhanced input parameters
+st.sidebar.header("Geothermal Well Input")
 
-# Streamlit app
-st.title("Interactive p-h Diagram with Optimization")
+# Define the range of geothermal well output temperatures
+geothermal_temp_min = st.sidebar.number_input("Geothermal Well Temp Min (°C)", value=100, step=1) + 273.15
+geothermal_temp_max = st.sidebar.number_input("Geothermal Well Temp Max (°C)", value=200, step=1) + 273.15
 
-# Sidebar for settings
-st.sidebar.header("Settings")
-fluid = st.sidebar.selectbox("Select Fluid", ['Water', 'R134a', 'Ammonia', 'Propane', 'Isobutane'])
+# Define the geothermal well pressure (we can optimize this later)
+geothermal_pressure = st.sidebar.number_input("Geothermal Well Pressure (MPa)", value=1.0, step=0.1) * 1e6
 
-# Define axis limits (enthalpy and pressure)
-st.sidebar.header("Axis Limits")
+st.sidebar.header("Cooler and Turbine Parameters")
+
+# Input for cooler performance (low condenser temperature or pressure)
+cooler_temp = st.sidebar.number_input("Cooler Temperature (°C)", value=30, step=1) + 273.15
+cooler_pressure = st.sidebar.number_input("Cooler Pressure (MPa)", value=0.1, step=0.01) * 1e6
+
+# Input for turbine isentropic efficiency
+turbine_efficiency = st.sidebar.number_input("Turbine Isentropic Efficiency (%)", value=80, step=1) / 100
+
+# Input for flow rate (optional, can optimize this later)
+flow_rate = st.sidebar.number_input("Fluid Mass Flow Rate (kg/s)", value=10.0, step=1.0)
+
+st.sidebar.header("p-h Diagram Axis Limits and Settings")
+
+# Define axis limits for p-h diagram
 h_min = st.sidebar.number_input("Min Enthalpy [J/kg]", value=0, step=100000)
 h_max = st.sidebar.number_input("Max Enthalpy [J/kg]", value=3000000, step=100000)
 p_min = st.sidebar.number_input("Min Pressure [kPa]", value=100, step=100) * 1e3
@@ -112,36 +93,16 @@ p_max = st.sidebar.number_input("Max Pressure [kPa]", value=5000, step=100) * 1e
 # Define delta T for isotherms
 delta_T = st.sidebar.number_input("Delta T for Isotherms (°C)", value=50, step=10)
 
-# User-defined points
-st.sidebar.header("Define the Points")
-points = []
-for i in range(1, 5):
-    T = st.sidebar.number_input(f"Point {i} Temperature (°C)", value=60 + 10*i, format='%d') + 273.15
-    P = st.sidebar.number_input(f"Point {i} Pressure (kPa)", value=10000 * (i + 1), format='%d') * 1e3
-    points.append({'T': T, 'P': P})
+# Placeholder for user-defined points (this will be optimized later)
+points = [
+    {'T': geothermal_temp_min, 'P': geothermal_pressure},
+    {'T': cooler_temp, 'P': cooler_pressure}
+]
 
 # Plot button
-Plot_Button = st.button('Plot p-h Diagram')
-if 'Plot_Button' not in st.session_state:
-    st.session_state.Plot_Button = False
-
-if Plot_Button or st.session_state.Plot_Button:
-    st.session_state.Plot_Button = True
-    fig = plot_ph_diagram(points, fluid, h_min, h_max, p_min, p_max, delta_T)
+if st.button('Plot p-h Diagram'):
+    fig = plot_ph_diagram(points, 'Isobutane', h_min, h_max, p_min, p_max, delta_T)
     st.pyplot(fig)
 
-# Optimization button for best energy extraction
-Optimization_Button = st.button('Optimize Energy Extraction')
-if 'Optimization_Button' not in st.session_state:
-    st.session_state.Optimization_Button = False
-
-if Optimization_Button or st.session_state.Optimization_Button:
-    st.session_state.Optimization_Button = True
-    delta_h, best_points = optimize_energy_extraction(points, fluid)
-    if best_points:
-        st.write(f"Best energy extraction between the following 4 points:")
-        for i, point in enumerate(best_points):
-            st.write(f"Point {i + 1}: T = {point['T'] - 273.15:.1f}°C, P = {point['P'] / 1e6:.2f} MPa")
-        st.write(f"Total Enthalpy difference: {delta_h:.2f} J/kg")
-    else:
-        st.write("Optimization could not be performed.")
+# Future Phases: Simulation of Scenarios, Optimization, etc.
+st.write("Additional features will be added in the next phases.")
