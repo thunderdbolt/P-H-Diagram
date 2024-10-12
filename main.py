@@ -109,12 +109,22 @@ for i in range(1, 5):
     points.append({'T': T, 'P': P})
 
 # Plot button
-if st.button('Plot p-h Diagram'):
+Plot_Button = st.button('Plot p-h Diagram')
+if 'Plot_Button' not in st.session_state:
+    st.session_state.Plot_Button = False
+
+if Plot_Button or st.session_state.Plot_Button:
+    st.session_state.Plot_Button = True
     fig = plot_ph_diagram(points, fluid, h_min, h_max, p_min, p_max)
     st.pyplot(fig)
 
 # Optimization button
-if st.button('Optimize Energy Extraction'):
+Optimization_Button = st.button('Optimize Energy Extraction')
+if 'Optimization_Button' not in st.session_state:
+    st.session_state.Optimization_Button = False
+
+if Optimization_Button or st.session_state.Optimization_Button:
+    st.session_state.Optimization_Button = True
     delta_h, best_points = optimize_energy_extraction(points, fluid)
     if best_points:
         st.write(f"Best energy extraction between:")
