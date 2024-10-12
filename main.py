@@ -3,8 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from CoolProp.CoolProp import PropsSI
 
-# Function to plot the p-h diagram with user-defined limits
-def plot_ph_diagram(points, fluid, h_min, h_max, p_min, p_max):
+# Function to plot the p-h diagram with user-defined limits and delta T for isotherms
+def plot_ph_diagram(points, fluid, h_min, h_max, p_min, p_max, delta_T):
     # Generate a range of pressures for plotting
     pressures = np.logspace(np.log10(p_min), np.log10(p_max), 100)
 
@@ -28,9 +28,9 @@ def plot_ph_diagram(points, fluid, h_min, h_max, p_min, p_max):
     plt.figure(figsize=(10, 8))
     plt.fill_betweenx(pressures / 1e6, h_f, h_g, color='lightgrey', alpha=0.5, where=(pressures < critical_pressure))
 
-    # Plot isotherms with user-defined limits on enthalpy
-    temperatures = np.linspace(273.15 + 10, 823.15, 10)
-    for T in temperatures:
+    # Plot isotherms with user-defined delta T
+    temperature_range = np.arange(273.15 + 10, 823.15, delta_T)
+    for T in temperature_range:
         try:
             h = [PropsSI('H', 'P', P, 'T', T, fluid) for P in pressures]
             if all(h_min <= val <= h_max for val in h):  # Plot only within enthalpy limits
@@ -70,21 +70,30 @@ def plot_ph_diagram(points, fluid, h_min, h_max, p_min, p_max):
 
     return plt
 
-# Optimization: Best energy extraction window
+# Optimization: Best energy extraction with four points
 def optimize_energy_extraction(points, fluid):
-    max_delta_h = 0
-    best_pair = None
+    if len(points) < 4:
+        st.error("Optimization requires at least 4 points.")
+        return None, None
     
-    for i in range(len(points) - 1):
+    max_delta_h = 0
+    best_points = None
+    
+    # Check all combinations of four points for the highest enthalpy drop
+    for i in range(len(points) - 3):
         h1 = PropsSI('H', 'P', points[i]['P'], 'T', points[i]['T'], fluid)
         h2 = PropsSI('H', 'P', points[i + 1]['P'], 'T', points[i + 1]['T'], fluid)
-        delta_h = abs(h2 - h1)
+        h3 = PropsSI('H', 'P', points[i + 2]['P'], 'T', points[i + 2]['T'], fluid)
+        h4 = PropsSI('H', 'P', points[i + 3]['P'], 'T', points[i + 3]['T'], fluid)
+        
+        # Calculate total enthalpy difference (Delta H)
+        delta_h = abs(h4 - h1)  # Total enthalpy drop between the first and fourth point
         
         if delta_h > max_delta_h:
             max_delta_h = delta_h
-            best_pair = (points[i], points[i + 1])
+            best_points = (points[i], points[i + 1], points[i + 2], points[i + 3])
 
-    return max_delta_h, best_pair
+    return max_delta_h, best_points
 
 # Streamlit app
 st.title("Interactive p-h Diagram with Optimization")
@@ -100,6 +109,9 @@ h_max = st.sidebar.number_input("Max Enthalpy [J/kg]", value=3000000, step=10000
 p_min = st.sidebar.number_input("Min Pressure [kPa]", value=100, step=100) * 1e3
 p_max = st.sidebar.number_input("Max Pressure [kPa]", value=5000, step=100) * 1e3
 
+# Define delta T for isotherms
+delta_T = st.sidebar.number_input("Delta T for Isotherms (°C)", value=50, step=10)
+
 # User-defined points
 st.sidebar.header("Define the Points")
 points = []
@@ -109,27 +121,17 @@ for i in range(1, 5):
     points.append({'T': T, 'P': P})
 
 # Plot button
-Plot_Button = st.button('Plot p-h Diagram')
-if 'Plot_Button' not in st.session_state:
-    st.session_state.Plot_Button = False
-
-if Plot_Button or st.session_state.Plot_Button:
-    st.session_state.Plot_Button = True
-    fig = plot_ph_diagram(points, fluid, h_min, h_max, p_min, p_max)
+if st.button('Plot p-h Diagram'):
+    fig = plot_ph_diagram(points, fluid, h_min, h_max, p_min, p_max, delta_T)
     st.pyplot(fig)
 
-# Optimization button
-Optimization_Button = st.button('Optimize Energy Extraction')
-if 'Optimization_Button' not in st.session_state:
-    st.session_state.Optimization_Button = False
-
-if Optimization_Button or st.session_state.Optimization_Button:
-    st.session_state.Optimization_Button = True
+# Optimization button for best energy extraction
+if st.button('Optimize Energy Extraction'):
     delta_h, best_points = optimize_energy_extraction(points, fluid)
     if best_points:
-        st.write(f"Best energy extraction between:")
-        st.write(f"Point 1: T = {best_points[0]['T'] - 273.15:.1f}°C, P = {best_points[0]['P'] / 1e6:.2f} MPa")
-        st.write(f"Point 2: T = {best_points[1]['T'] - 273.15:.1f}°C, P = {best_points[1]['P'] / 1e6:.2f} MPa")
-        st.write(f"Enthalpy difference: {delta_h:.2f} J/kg")
+        st.write(f"Best energy extraction between the following 4 points:")
+        for i, point in enumerate(best_points):
+            st.write(f"Point {i + 1}: T = {point['T'] - 273.15:.1f}°C, P = {point['P'] / 1e6:.2f} MPa")
+        st.write(f"Total Enthalpy difference: {delta_h:.2f} J/kg")
     else:
-        st.write("Not enough points to optimize energy extraction.")
+        st.write("Optimization could not be performed.")
